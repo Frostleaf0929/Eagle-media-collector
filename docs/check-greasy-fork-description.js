@@ -22,9 +22,21 @@ if (!fs.existsSync(file)) {
 const md = fs.readFileSync(file, "utf8");
 const FENCE = "\u0060\u0060\u0060";
 
-// 找「## 描述文本框」下的第一个 ```text 块
+// 在「标题行」里找关键词那一节，再取该节下的第一个 ```text 块。
+// 不能直接用 indexOf(关键词)：开头的对照表里也会提到「描述文本框」，
+// 会把下一个 text 块（脚本名）误当成描述文案 —— 踩过一次。
+function findHeading(text, keyword) {
+  const lines = text.split(/\r?\n/);
+  let offset = 0;
+  for (const line of lines) {
+    if (/^#{1,6}\s/.test(line) && line.includes(keyword)) return offset;
+    offset += line.length + 1;
+  }
+  return -1;
+}
+
 function extractBlock(text, headingKeyword) {
-  const h = text.indexOf(headingKeyword);
+  const h = findHeading(text, headingKeyword);
   if (h < 0) return null;
   const s = text.indexOf(FENCE + "text", h);
   if (s < 0) return null;
@@ -34,10 +46,15 @@ function extractBlock(text, headingKeyword) {
   return text.slice(bodyStart, e).replace(/\n$/, "");
 }
 
-const heading = "## 描述文本框";
+const heading = "描述文本框";
 const body = extractBlock(md, heading);
 if (body === null) {
   console.error("没能从 " + path.basename(file) + " 里提取到「" + heading + "」下的 text 代码块。");
+  process.exit(2);
+}
+if (body.length < 100) {
+  console.error("提取到的内容只有 " + body.length + " 字符，明显不是描述文案（可能抓错了段落）：");
+  console.error("  " + body.split("\n")[0]);
   process.exit(2);
 }
 
