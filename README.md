@@ -50,6 +50,13 @@
 https://raw.githubusercontent.com/Frostleaf0929/Eagle-media-collector/main/save-twitter-media-to-eagle.user.js
 ```
 
+也可以从 **Greasy Fork** 安装（搜索脚本名 `Save Twitter/X Media to Eagle`）。
+从 Greasy Fork 安装的好处是**以后更新由它自动分发**，不用手动看仓库。
+
+> **不要两份都装。** 本项目的 `@name` + `@namespace` 是唯一标识，
+> 本地安装版与 Greasy Fork 版的 `@namespace` 不同，会被 Tampermonkey 当成两个脚本，
+> 导致推文下面出现两个 Eagle 按钮、两套各自独立的设置。装一份就好。
+
 > **文件名和仓库名为什么不一样？**
 > 仓库名 `Eagle-media-collector` 是**整个项目**的名字（含用户脚本 + 扩展补丁两部分）；
 > 脚本文件名 `save-twitter-media-to-eagle.user.js` 是**描述它自己做什么**。
@@ -152,7 +159,8 @@ node patches/patch-zen-extension.js
 ## 二·补、已知问题：Greasy Fork 拒绝导入（`@description:zh-TW` / `@description:ja` 报「不能为空字符」）
 
 Greasy Fork 支持在 <https://greasyfork.org/zh-CN/import> 里粘贴 Raw 链接来导入脚本。
-本仓库曾因本地化元数据触发它的语言校验而被拒绝导入，**根因已查清并处置**（见下）。
+本仓库曾因本地化元数据触发它的语言校验而被拒绝，**根因已查清、已处置、并已实测通过导入**。
+下面完整记录排查过程，供遇到同类问题的人参考。
 Tampermonkey 直接用 Raw 链接安装**从未受影响**。
 
 ### 现象
@@ -225,10 +233,12 @@ dl_lang_code = DetectLanguage.detect_code(ft[0...1000])   # 只看前 1000 字�
 > 值得记一笔：第一次「补上 zh-TW / ja 描述」的修复（提交 `cd28668`）
 > **在语言检测眼里反而加重了** `ja` 的特征，所以报错没变。
 
-### 处置（提交 `652c6c2`）
+### 处置（提交 `652c6c2`）—— 已实测有效
 
 只保留 **英文基础 + `zh-CN`** 一种本地化变体，前 1000 字符的假名清零。
 这样 ② 的跳过逻辑无论怎么走都不会踩到。
+
+**验证结果**：改动推送后，Greasy Fork 返回「以下脚本已成功导入」。反向印证了上述因果链。
 
 **代价**：繁体中文与日文用户在 Greasy Fork 上看到英文标题与描述。
 功能完全不受影响（这些字段只影响展示）。
@@ -240,6 +250,10 @@ dl_lang_code = DetectLanguage.detect_code(ft[0...1000])   # 只看前 1000 字�
 - 每种 `@name:xx` 都配一个**内容不同**的 `@description:xx`（相同也报错）
 - 或干脆不写任何 `@name:xx`，只用基础 `@name`
 - 改完先确认脚本前 1000 字符里没有会误导语言检测的文字
+
+> 仍未确证的一点：`full_text` 的确切定义（在 `app/models/script_version_js.rb` 里，
+> 排查时未取到）。若它不是「整个 code 含头部元数据」，上述因果链的中间环节会弱一些——
+> 但结论已经实测通过，处置方式本身是可靠的。
 
 ---
 
