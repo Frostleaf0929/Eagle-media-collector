@@ -1,27 +1,31 @@
 # Greasy Fork 脚本页：可直接粘贴的文案
 
-> **先分清三个概念**（Greasy Fork 的发布表单里是**两个不同的文本框**）：
+> ## 字段真相（实测 + 源码确认，别再看错）
 >
-> | 位置 | 表单里叫什么 | 来源 | 换行 | 上限 | 支持 Markdown |
-> | --- | --- | --- | --- | --- | --- |
-> | ① 脚本头元数据 | `description` 字段的初值 | `// @description` | ❌ **必须单行** | 500 | ❌ |
-> | ② 描述文本框 | **描述**（`description`） | 导入时取自 `@description` | ✅ 可以多行 | 500 | ❌ 不渲染 |
-> | ③ 附加信息 | **附加信息**（`additional_info`） | `@description` 之外，另填 | ✅ 可以多行 | **50,000** | ✅ HTML/Markdown |
+> Greasy Fork 有**新建**和**更新**两套表单，字段不一样
+> （源码 `app/views/script_versions/_form.html.erb`）：
 >
-> 表单字段顺序（源码 `app/views/script_versions/_form.html.erb`）：
-> `name` → `description` → `code` → `additional_info` → 截图 → 更新说明
+> | 表单 | 字段顺序 | 有 description 输入框吗 |
+> | --- | --- | --- |
+> | **新建脚本** | `name` → `description` → `code` → `additional_info` → 截图 | **有** |
+> | **更新脚本** | `name` → `code` → `additional_info` → 截图 → 更新说明 | **没有** |
 >
-> **踩过的坑**：把**多行说明写进了元数据行**（①）。换行后第二行没有 `//` 前缀，
+> **更新时 `description` 是从代码里的 `@description` 解析出来的**，只能在网页上编辑代码元数据来改它。
+> 所以**更新脚本时，能写多行内容的框只有「附加信息」那一个**。
+>
+> | 放什么 | 写到哪 | 换行 | 上限 | Markdown |
+> | --- | --- | --- | --- | --- |
+> | 一句话简介 | 代码元数据 `// @description:xx` | ❌ **必须单行** | 500 | ❌ |
+> | 详细说明 | **更新表单的「附加信息」框** | ✅ 多行 | **50,000** | ✅ 支持 |
+>
+> 中文界面上「附加信息」框的提示语就是：「**更详细的描述，或者操作说明等。**」
+>
+> **踩过的坑**：把**多行说明写进了元数据行**。换行后第二行没有 `//` 前缀，
 > 被当成 JavaScript 代码，报
 > `Uncaught SyntaxError: Unexpected identifier 'Eagle'`（`Eagle` 是断行后那行的开头）。
 >
-> **正确分工**：
-> - **① 元数据** → 只写**一句短的**（单行）
-> - **② 描述** → 写简要说明（≤500 字符，多行可以，但 Markdown 不渲染）
-> - **③ 附加信息** → 想写长内容、想用 Markdown、想放截图，放这里
->
-> ⚠️ **`附加信息` 有联动校验**：填了某语言的附加信息，就必须存在同语言的
-> `@name:xx`，否则报「您提交了“xx”这个语言的附加信息，但没有指定 `@name:xx`」
+> ⚠️ **「附加信息」有联动校验**：填了某语言的附加信息，就必须存在同语言的
+> `@name:xx`，否则报「您提交了该语言的附加信息，但没有指定 `@name:xx`」
 > （源码 `script_version.rb` 的 `localized_additional_info_with_no_name`）。
 > 本项目已有 `@name:zh-CN`，所以填中文附加信息是安全的。
 
@@ -39,7 +43,7 @@ Save Twitter/X Media to Eagle
 
 ---
 
-## ① 元数据：`@description` 只写一句（必须单行）
+## 代码元数据：`@description` 只写一句（必须单行）
 
 ### 中文（推荐，69 字符）
 
@@ -55,14 +59,17 @@ Add an Eagle button to the tweet action bar: one click saves the original video/
 
 > 这行是写在 `// @description:zh-CN  ` 后面的。
 > **不要在这里换行**，也不要写 Markdown。
-> 想加更多内容，放到下面的「② 描述」或「③ 附加信息」里。
+> 想加更多内容，放到下面的「附加信息」里。
 
 ---
 
-## ② 描述文本框：多行版（410 字符，在 500 上限内）
+## 附加信息：多行版（410 字符，远低于 50,000 上限）
 
-这段粘到 Greasy Fork 发布表单里的「**描述**」框。**可以换行**，
-但**不要写 Markdown**（不渲染，`[文字](链接)` 会原样显示成文本），要给网址就直接写完整 URL。
+这段粘到**更新表单里的「附加信息」框**（就是中文提示语写着
+「更详细的描述，或者操作说明等。」的那个）。**可以换行**。
+
+这个框在页面上**支持 Markdown**，但为稳妥、也便于直接阅读，这里给的是纯文本版；
+想要 Markdown 排版，用本文件末尾「备查」区那份。
 
 ```text
 把 X/Twitter 的原视频、原图一键存进 Eagle，不用先下载再导入。
@@ -85,20 +92,19 @@ https://github.com/Frostleaf0929/Eagle-media-collector
 
 ---
 
-## ③ 附加信息：想写更长、想用 Markdown 就放这里
+## 附加信息：想写更长、想用 Markdown 就放这里
 
 「附加信息」上限 **50,000 字符**，且**支持 HTML / Markdown**，
-在脚本页上会显示成一个独立区块。它的规则与「描述」不同：
+在脚本页上会显示成一个独立区块。
 
 - ✅ 可以多行、可以 Markdown、可以放截图
 - ⚠️ 填了某语言的附加信息，就必须有同语言的 `@name:xx`（本项目已有 `@name:zh-CN`，安全）
 - ℹ️ 中文页面上的提示语是「**更详细的描述，或者操作说明等。**」
-
-完整的 Markdown 版本功能列表见本文件末尾「备查」区，可直接粘到「附加信息」。
+- ℹ️ 完整的 Markdown 版功能列表见本文件末尾「备查」区，可直接粘过去
 
 ---
 
-## 为什么不能再长
+## 为什么 `@description` 不能再长
 
 Greasy Fork 的校验（`app/models/script.rb`）：
 
@@ -106,11 +112,11 @@ Greasy Fork 的校验（`app/models/script.rb`）：
 MAX_LENGTHS = { name: 100, description: 500, additional_info: 50_000 }.freeze
 ```
 
-导入路径会开 `truncate_description = true`，所以超长不是报错，而是**悄悄砍掉第 500 字符之后的内容**。
-排查时就是从「描述末尾莫名断在半句话」反推到这个限制的。
+导入路径会开 `truncate_description = true`，所以超过 500 字符不是报错，
+而是**悄悄砍掉第 500 字符之后的内容**。排查时就是从「描述末尾莫名断在半句话」反推到这个限制的。
 
-**想让描述更丰富**：Greasy Fork 的脚本页另有「附加信息」字段，上限 50,000 字符，
-且**支持 HTML/Markdown**。详细功能列表适合放那里，而不是塞进脚本的 `@description`。
+**想让描述更丰富**：放上面那个「附加信息」框（上限 50,000 字符），
+而不是往 `@description` 或描述里塞。
 
 ---
 
@@ -158,7 +164,7 @@ MAX_LENGTHS = { name: 100, description: 500, additional_info: 50_000 }.freeze
 
 ### Markdown
 
-（用于 README、GitHub 等支持 Markdown 的地方，**不要**粘进 Greasy Fork 的描述框）
+（用于 README、GitHub 等支持 Markdown 的地方；也可以粘进 Greasy Fork 的「附加信息」框）
 
 ````markdown
 把 X/Twitter 的**原视频、原图**一键存进 [Eagle](https://eagle.cool/)，不用先下载再导入。

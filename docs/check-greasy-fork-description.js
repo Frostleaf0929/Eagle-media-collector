@@ -46,7 +46,7 @@ function extractBlock(text, headingKeyword) {
   return text.slice(bodyStart, e).replace(/\n$/, "");
 }
 
-const heading = "描述文本框";
+const heading = "附加信息";
 const body = extractBlock(md, heading);
 if (body === null) {
   console.error("没能从 " + path.basename(file) + " 里提取到「" + heading + "」下的 text 代码块。");
