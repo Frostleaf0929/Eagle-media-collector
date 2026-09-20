@@ -149,6 +149,61 @@ node patches/patch-zen-extension.js
 
 ---
 
+## 二·补、已知问题：Greasy Fork 拒绝导入（`@description:zh-TW` / `@description:ja` 报「不能为空字符」）
+
+Greasy Fork 支持在 <https://greasyfork.org/zh-CN/import> 里粘贴 Raw 链接来导入脚本，
+本仓库也已按它的规则补全了本地化元数据。但**目前导入会被拒绝**。
+在它修好之前，请用第一节里的 Raw 链接直接安装（Tampermonkey 不受影响）。
+
+### 现象
+
+```text
+以下脚本无法导入：
+https://raw.githubusercontent.com/Frostleaf0929/Eagle-media-collector/main/save-twitter-media-to-eagle.user.js
+- @description:zh-TW不能为空字符, @description:ja不能为空字符
+```
+
+### 已经排查掉的
+
+| 假设 | 验证方式 | 结论 |
+| --- | --- | --- |
+| 脚本没写 `@description:zh-TW` / `@description:ja` | 解析脚本头 | **不成立**——两条都在（`3.2.1` 起） |
+| 推送到 GitHub 失败，Greasy Fork 拿到旧文件 | 比对 `git rev-parse HEAD` 与 `origin/main`，再 `git show HEAD:` 读提交里的内容 | **不成立**——两者同为 `cd28668`，两行都在 |
+| 是 GitHub CDN 缓存 | Raw 链接后加 `?v=3.2.1` 重试 | **不成立**——报错完全一样 |
+| 语言码写法不符合规定 | 对照 [元信息字段文档](https://greasyfork.org/zh-CN/help/meta-keys) | **不成立**——它规定 `@description:XX-YY`，`ja` 与 `zh-TW` 都合式 |
+| 代码被压缩混淆导致解析失败 | 检查最长代码行 | **不成立**——最长 606 字符 |
+
+### 尚未确定的原因
+
+**Greasy Fork 侧为何仍把这两项判为空，目前没有查清。** 上面五种常见原因都已排除，
+剩下两种可能，本仓库这边无法直接观测：
+
+1. **Greasy Fork 抓取时拿到的是旧内容**（与 `?v=` 无关的缓存层）
+2. **Greasy Fork 对 `@name:XX` / `@description:XX` 的校验有额外要求**，文档未写明
+
+### 一步就能定位的验证
+
+把 Raw 链接**直接粘到浏览器地址栏**打开，`Ctrl+F` 搜索：
+
+```text
+@description:ja
+```
+
+- **搜得到** → GitHub 上确实是新内容，问题在 Greasy Fork 侧 → 见下「临时绕开」
+- **搜不到** → 拿到的是旧内容，等 CDN 刷新后再试
+
+### 临时绕开：去掉本地化元数据
+
+把脚本头里这两组字段删到只剩一种语言，即删掉这 4 行：
+`@name:zh-TW`、`@name:ja`、`@description:zh-TW`、`@description:ja`。
+
+**代价**：繁体中文和日文用户在 Greasy Fork 上会看到英文名与英文描述。
+功能完全不受影响（这些字段只影响展示）。
+
+> 这个绕法**尚未实测**，属于待验证的建议。
+
+---
+
 ## 三、为什么不直接提供改好的扩展包
 
 补丁版扩展里 **97.6% 的文件是 Eagle 自己的代码**（Edge 版 616 个文件里只改了 15 个）。
