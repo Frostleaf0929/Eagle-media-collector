@@ -43,6 +43,19 @@
 
 > 或者在 Tampermonkey 面板 → 实用工具 → 从 URL 安装，粘贴 Raw 链接。
 
+直接安装链接（**注意仓库名 `Eagle-media-collector` 的 `E` 要大写**，
+`raw.githubusercontent.com` 不跟随 GitHub 的重定向，小写会 404）：
+
+```text
+https://raw.githubusercontent.com/Frostleaf0929/Eagle-media-collector/main/save-twitter-media-to-eagle.user.js
+```
+
+> **文件名和仓库名为什么不一样？**
+> 仓库名 `Eagle-media-collector` 是**整个项目**的名字（含用户脚本 + 扩展补丁两部分）；
+> 脚本文件名 `save-twitter-media-to-eagle.user.js` 是**描述它自己做什么**。
+> 两者刻意不重名，这样你在 Tampermonkey 的脚本列表里一眼能认出它是干什么的。
+> 脚本的 `@namespace` 指向本仓库，就是它和本项目的关系凭据。
+
 ### 使用
 
 1. 打开一条带视频或图片的推文
@@ -162,6 +175,11 @@ node patches/patch-zen-extension.js
 - 需求、验证与实机测试由仓库作者（Frostleaf0929）提出与执行
 
 > 开发过程中也保留了完整的测试与踩坑记录，欢迎参考。
+
+## 发布信息
+
+Greasy Fork 脚本页要用的文案在 [`docs/greasy-fork-description.md`](docs/greasy-fork-description.md)，
+可直接复制粘贴。
 
 ## 许可
 
