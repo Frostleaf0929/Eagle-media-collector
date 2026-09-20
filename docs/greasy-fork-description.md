@@ -1,24 +1,29 @@
 # Greasy Fork 脚本页：可直接粘贴的文案
 
-> **先分清两个「描述」—— 它们不是一回事，但共用同一份数据**：
+> **先分清三个概念**（Greasy Fork 的发布表单里是**两个不同的文本框**）：
 >
-> | | 脚本头的元数据 | Greasy Fork 的「描述」文本框 |
-> | --- | --- | --- |
-> | 长什么样 | `// @description:zh-CN  一句话` | 网页上那个大文本域 |
-> | **能否换行** | ❌ **必须单行** | ✅ 可以多行 |
-> | 上限 | 500 字符 | 同一份数据，也是 500 字符 |
+> | 位置 | 表单里叫什么 | 来源 | 换行 | 上限 | 支持 Markdown |
+> | --- | --- | --- | --- | --- | --- |
+> | ① 脚本头元数据 | `description` 字段的初值 | `// @description` | ❌ **必须单行** | 500 | ❌ |
+> | ② 描述文本框 | **描述**（`description`） | 导入时取自 `@description` | ✅ 可以多行 | 500 | ❌ 不渲染 |
+> | ③ 附加信息 | **附加信息**（`additional_info`） | `@description` 之外，另填 | ✅ 可以多行 | **50,000** | ✅ HTML/Markdown |
 >
-> **踩过的坑**：在 Greasy Fork 网页编辑器里把**多行说明**写进了**元数据行**。
-> 换行后第二行没有 `//` 前缀，就被当成 JavaScript 代码，报
-> `Uncaught SyntaxError: Unexpected identifier 'Eagle'`（`Eagle` 正是断行后那行的开头）。
+> 表单字段顺序（源码 `app/views/script_versions/_form.html.erb`）：
+> `name` → `description` → `code` → `additional_info` → 截图 → 更新说明
 >
-> **正确做法**：
-> - **元数据**只放**一句短的**（单行）
-> - **多行说明**粘到 Greasy Fork 的「描述」文本框里
+> **踩过的坑**：把**多行说明写进了元数据行**（①）。换行后第二行没有 `//` 前缀，
+> 被当成 JavaScript 代码，报
+> `Uncaught SyntaxError: Unexpected identifier 'Eagle'`（`Eagle` 是断行后那行的开头）。
 >
-> 另外两条也来自 Greasy Fork 源码 `app/models/script.rb`
-> （`MAX_LENGTHS = { name: 100, description: 500 }`，超长**静默截断**不报错）：
-> **描述框不渲染 Markdown**（`[文字](链接)` 会原样显示），要给网址就直接写完整 URL。
+> **正确分工**：
+> - **① 元数据** → 只写**一句短的**（单行）
+> - **② 描述** → 写简要说明（≤500 字符，多行可以，但 Markdown 不渲染）
+> - **③ 附加信息** → 想写长内容、想用 Markdown、想放截图，放这里
+>
+> ⚠️ **`附加信息` 有联动校验**：填了某语言的附加信息，就必须存在同语言的
+> `@name:xx`，否则报「您提交了“xx”这个语言的附加信息，但没有指定 `@name:xx`」
+> （源码 `script_version.rb` 的 `localized_additional_info_with_no_name`）。
+> 本项目已有 `@name:zh-CN`，所以填中文附加信息是安全的。
 
 ---
 
@@ -34,7 +39,7 @@ Save Twitter/X Media to Eagle
 
 ---
 
-## 元数据：`@description` 只写一句（必须单行）
+## ① 元数据：`@description` 只写一句（必须单行）
 
 ### 中文（推荐，69 字符）
 
@@ -50,13 +55,14 @@ Add an Eagle button to the tweet action bar: one click saves the original video/
 
 > 这行是写在 `// @description:zh-CN  ` 后面的。
 > **不要在这里换行**，也不要写 Markdown。
-> 想加更多内容，放到下面的「描述文本框」里。
+> 想加更多内容，放到下面的「② 描述」或「③ 附加信息」里。
 
 ---
 
-## 描述文本框：多行版（410 字符，在 500 上限内）
+## ② 描述文本框：多行版（410 字符，在 500 上限内）
 
-这段粘到 Greasy Fork 的「描述」框。**可以换行**，但不要写 Markdown，网址直接写完整 URL。
+这段粘到 Greasy Fork 发布表单里的「**描述**」框。**可以换行**，
+但**不要写 Markdown**（不渲染，`[文字](链接)` 会原样显示成文本），要给网址就直接写完整 URL。
 
 ```text
 把 X/Twitter 的原视频、原图一键存进 Eagle，不用先下载再导入。
@@ -76,6 +82,19 @@ https://github.com/Frostleaf0929/Eagle-media-collector
 ```
 
 用 `node docs/check-greasy-fork-description.js` 可以随时核对长度。
+
+---
+
+## ③ 附加信息：想写更长、想用 Markdown 就放这里
+
+「附加信息」上限 **50,000 字符**，且**支持 HTML / Markdown**，
+在脚本页上会显示成一个独立区块。它的规则与「描述」不同：
+
+- ✅ 可以多行、可以 Markdown、可以放截图
+- ⚠️ 填了某语言的附加信息，就必须有同语言的 `@name:xx`（本项目已有 `@name:zh-CN`，安全）
+- ℹ️ 中文页面上的提示语是「**更详细的描述，或者操作说明等。**」
+
+完整的 Markdown 版本功能列表见本文件末尾「备查」区，可直接粘到「附加信息」。
 
 ---
 
