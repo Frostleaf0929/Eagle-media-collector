@@ -50,7 +50,12 @@
 https://raw.githubusercontent.com/Frostleaf0929/Eagle-media-collector/main/save-twitter-media-to-eagle.user.js
 ```
 
-也可以从 **Greasy Fork** 安装（搜索脚本名 `Save Twitter/X Media to Eagle`）。
+也可以从 **Greasy Fork** 安装：
+
+```text
+https://greasyfork.org/zh-CN/scripts/596668-save-twitter-x-media-to-eagle
+```
+
 从 Greasy Fork 安装的好处是**以后更新由它自动分发**，不用手动看仓库。
 
 > **不要两份都装。** 本项目的 `@name` + `@namespace` 是唯一标识，
@@ -156,7 +161,7 @@ node patches/patch-zen-extension.js
 
 ---
 
-## 二·补、已知问题：Greasy Fork 拒绝导入（`@description:zh-TW` / `@description:ja` 报「不能为空字符」）
+## 二·补、踩坑记录：Greasy Fork 曾拒绝导入（`@description:zh-TW` / `@description:ja` 报「不能为空字符」）
 
 Greasy Fork 支持在 <https://greasyfork.org/zh-CN/import> 里粘贴 Raw 链接来导入脚本。
 本仓库曾因本地化元数据触发它的语言校验而被拒绝，**根因已查清、已处置、并已实测通过导入**。
@@ -288,6 +293,43 @@ dl_lang_code = DetectLanguage.detect_code(ft[0...1000])   # 只看前 1000 字�
 
 Greasy Fork 脚本页要用的文案在 [`docs/greasy-fork-description.md`](docs/greasy-fork-description.md)，
 可直接复制粘贴。
+
+## 仓库自带的校验脚本
+
+`docs/` 下有两个脚本，都是本项目**踩过坑之后加的**，用来防止同一个问题复发。
+改脚本元数据或发布文案后跑一下，比事后靠报错排查省事得多。
+
+```bash
+node docs/check-userscript-metadata.js      # 校验脚本元数据
+node docs/check-greasy-fork-description.js  # 校验发布文案长度与格式
+```
+
+### `check-userscript-metadata.js` —— 防「明明写了却报空字符」
+
+**它防的坑**：往 Greasy Fork 导入时被拒，报
+`@description:zh-TW不能为空字符`，可脚本里那条描述明明写着。
+根因是三处 Greasy Fork 代码共同作用（详见上面「已知问题」章节），
+简单说就是：**提供了 `@name:xx` 就必须有同语言的 `@description:xx`，
+而脚本被语言检测判为默认语言的那一种，其描述会被跳过建档**。
+
+脚本会检查：
+
+1. 必需字段齐不齐
+2. `@name` / `@description` 是否超长（上限 100 / 500 字符，超长静默截断）
+3. `@name:xx` 与 `@description:xx` 的语言变体是否配对
+4. **语言检测风险**：统计前 1000 字符里的日文假名、以及本地化变体是否多于一种
+   —— 多于一种就有踩坑风险
+5. 是否被压缩混淆（Greasy Fork 规则禁止）
+
+### `check-greasy-fork-description.js` —— 防「描述被静默截断」
+
+**它防的坑**：往 Greasy Fork 描述框粘了 1405 字符的文案，发布后发现末尾莫名断在半句话。
+因为 Greasy Fork 对脚本描述的上限是 **500 字符**，超长不报错、直接截断。
+
+脚本会提取 `docs/greasy-fork-description.md` 里「推荐版」那段文案，检查：
+
+1. 字符数是否超过 500
+2. 是否含 Markdown 链接 / 表格语法（**描述框不渲染 Markdown**，写了会原样显示）
 
 ## 许可
 
