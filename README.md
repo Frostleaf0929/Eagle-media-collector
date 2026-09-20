@@ -72,9 +72,10 @@ Eagle 官方扩展拖拽图片时，有时存下来的是**页面上的缩略图
 
 ### 怎么用
 
-> **重要**：补丁脚本按 Eagle 扩展某个版本的代码结构做字符串替换。
-> 如果 Eagle 更新后改了这些位置，脚本会明确报「锚点未命中」并**不修改任何内容**，
-> 这时需要按报错调整锚点（欢迎提 issue）。
+> **重要**：补丁脚本按 Eagle 扩展某个版本的代码结构做字符串替换，**是版本相关的**。
+> 如果 Eagle 更新后改了这些位置，脚本会报「锚点未命中」并以退出码 `1` 结束。
+> 这时它**仍然会写出一份打了部分补丁的副本**（供你排查用），但**不会碰你已安装的扩展** ——
+> 请**不要**去加载那份不完整的副本，需要按报错调整锚点（欢迎提 issue）。
 
 **Edge / Chrome 版：**
 
@@ -83,7 +84,12 @@ Eagle 官方扩展拖拽图片时，有时存下来的是**页面上的缩略图
 node patches/patch-edge-extension.js
 ```
 
-脚本会自动找到你本机已安装的扩展，复制一份到 `eagle-original-drag-clean/` 并打补丁。
+脚本会自动找到你本机已安装的扩展，**复制一份到脚本目录下的 `eagle-original-drag-clean/`** 再打补丁。
+你原来装的那份扩展不会被改动。
+
+> 已验证的版本：Eagle for Edge **3.1.26**（MV3，`background-v3.js`）。
+> 其他版本若锚点结构不同，脚本会报错并拒绝给出「成功」。
+
 然后：
 
 1. 打开 `edge://extensions/`
@@ -103,20 +109,36 @@ node patches/patch-edge-extension.js
 node patches/patch-zen-extension.js
 ```
 
-4. 把生成的 `zen-eagle-original-drag\` 打包成 `.xpi`（或直接以临时扩展加载）
+4. 把生成的 `zen-eagle-original-drag\` 打包成 `.xpi`
 
-> Zen 侧载未签名扩展需要 `@Manual_CRXInstaller` 之类的辅助扩展，或从 `about:debugging` 临时加载。
+   打包时**注意**：Windows 自带的 PowerShell `Compress-Archive` 写出的条目名用的是反斜杠 `\`，
+   而 ZIP 规范要求正斜杠 `/`，这样打出来的 XPI 可能无法安装。推荐用 .NET 的
+   `ZipFile::CreateFromDirectory`，或直接用 7-Zip / Bandizip 这类工具压缩。
+
+   同样注意：生成的 XPI 里**根目录必须直接是 `manifest.json`**，不要多套一层文件夹。
+
+> **未签名 XPI 在 Zen 里装不上**。Zen 是 release 渠道，`xpinstall.signatures.required`
+> 自 Firefox 48 起就无法在 release / beta 里用 `about:config` 关闭
+> （[Mozilla 说明](https://blog.mozilla.org/addons/2016/07/29/extension-signing-availability-of-unbranded-builds/)）。
+> 可行办法只有两条：
+>
+> - **临时加载**（推荐、免费）：打开 `about:debugging#/runtime/this-firefox` → 点「临时载入附加组件」→
+>   选中 `zen-eagle-original-drag/manifest.json`（选这个文件本身，不用先打包）。
+>   **每次重启 Zen 后要重新载入一次**。
+> - **拿去 AMO 签名**：上传到 [addons.mozilla.org](https://addons.mozilla.org/developers/)
+>   走「自主分发（unlisted）」通道，签完即可永久安装。
 
 ### 回滚
 
-- Edge：在 `edge://extensions/` 里移除加解压的那个扩展即可，**不影响商店原版**
-- Zen：删掉你侧载的那个扩展，商店/AMO 原版不受影响
+- Edge：在 `edge://extensions/` 里移除加载的那个扩展即可，**不影响商店原版**
+- Zen：临时加载的在 Zen 重启后自动消失；AMO 签名装的在 `about:addons` 里移除，
+  商店 / AMO 上那份原版不受影响
 
 ---
 
 ## 三、为什么不直接提供改好的扩展包
 
-补丁版扩展里 **97.7% 的文件是 Eagle 自己的代码**（Edge 版 616 个文件里只改了 15 个）。
+补丁版扩展里 **97.6% 的文件是 Eagle 自己的代码**（Edge 版 616 个文件里只改了 15 个）。
 直接再分发整包会涉及 Eagle 的授权问题，所以本仓库**只提供补丁逻辑**，
 用你自己机器上那份扩展作为输入。
 
@@ -130,6 +152,17 @@ node patches/patch-zen-extension.js
 - HLS / m3u8 分片流会被跳过，避免存进坏文件
 - 作者无法在部分网络环境下访问 `greasyfork.org`，如遇安装问题请用 GitHub Raw 链接
 
+## 开发说明
+
+本项目**主要由 DSH（DeepSeek Harness）编写**。
+
+- 用户脚本（`save-twitter-media-to-eagle.user.js`）：从需求分析、逆向 X 的网络数据格式、
+  到设置面板与全部测试，均由 DSH 编写
+- 扩展补丁（`patches/`）：补丁逻辑与锚点定位均由 DSH 编写
+- 需求、验证与实机测试由仓库作者（Frostleaf0929）提出与执行
+
+> 开发过程中也保留了完整的测试与踩坑记录，欢迎参考。
+
 ## 许可
 
 MIT，见 [LICENSE](LICENSE)。
@@ -137,4 +170,6 @@ MIT，见 [LICENSE](LICENSE)。
 ## 致谢
 
 - [Eagle](https://eagle.cool/) —— 本项目的目标应用
+- [DSH（DeepSeek Harness）](https://github.com/deepseek-ai) —— 本项目主要开发者
 - 参考了 [Twitter Media Downloader](https://greasyfork.org/en/scripts/423001-twitter-media-downloader) 的控制面板思路
+
