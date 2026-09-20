@@ -151,9 +151,9 @@ node patches/patch-zen-extension.js
 
 ## 二·补、已知问题：Greasy Fork 拒绝导入（`@description:zh-TW` / `@description:ja` 报「不能为空字符」）
 
-Greasy Fork 支持在 <https://greasyfork.org/zh-CN/import> 里粘贴 Raw 链接来导入脚本，
-本仓库也已按它的规则补全了本地化元数据。但**目前导入会被拒绝**。
-在它修好之前，请用第一节里的 Raw 链接直接安装（Tampermonkey 不受影响）。
+Greasy Fork 支持在 <https://greasyfork.org/zh-CN/import> 里粘贴 Raw 链接来导入脚本。
+本仓库曾因本地化元数据触发它的语言校验而被拒绝导入，**根因已查清并处置**（见下）。
+Tampermonkey 直接用 Raw 链接安装**从未受影响**。
 
 ### 现象
 
@@ -173,34 +173,73 @@ https://raw.githubusercontent.com/Frostleaf0929/Eagle-media-collector/main/save-
 | 语言码写法不符合规定 | 对照 [元信息字段文档](https://greasyfork.org/zh-CN/help/meta-keys) | **不成立**——它规定 `@description:XX-YY`，`ja` 与 `zh-TW` 都合式 |
 | 代码被压缩混淆导致解析失败 | 检查最长代码行 | **不成立**——最长 606 字符 |
 
-### 尚未确定的原因
+### 根因（已从 Greasy Fork 源码查出）
 
-**Greasy Fork 侧为何仍把这两项判为空，目前没有查清。** 上面五种常见原因都已排除，
-剩下两种可能，本仓库这边无法直接观测：
+Greasy Fork 是开源的，拒绝逻辑在 [greasyfork-org/greasyfork](https://github.com/greasyfork-org/greasyfork) 里，
+由三处代码共同造成：
 
-1. **Greasy Fork 抓取时拿到的是旧内容**（与 `?v=` 无关的缓存层）
-2. **Greasy Fork 对 `@name:XX` / `@description:XX` 的校验有额外要求**，文档未写明
+**① 硬规则：有本地化名称就必须有同语言的本地化描述**
 
-### 一步就能定位的验证
+`app/models/script.rb` 第 130-143 行：
 
-把 Raw 链接**直接粘到浏览器地址栏**打开，`Ctrl+F` 搜索：
-
-```text
-@description:ja
+```ruby
+# Every locale that provides a name must have a description that's different than the name
+validate do |script|
+  localized_names.each do |ln|
+    matching_description = localized_descriptions.find { |ld| ld.locale == ln.locale }
+    validation_key = LocalizedScriptAttribute.localized_meta_key(:description, ln.locale, false)
+    if matching_description.nil?
+      script.errors.add(validation_key, I18n.t('errors.messages.blank'))
 ```
 
-- **搜得到** → GitHub 上确实是新内容，问题在 Greasy Fork 侧 → 见下「临时绕开」
-- **搜不到** → 拿到的是旧内容，等 CDN 刷新后再试
+`localized_meta_key`（`app/models/localized_script_attribute.rb` 第 17-19 行）拼出的键
+正是 `@description:` + 语言码，所以报错文本就是 `@description:zh-TW不能为空字符`。
 
-### 临时绕开：去掉本地化元数据
+**② 默认语言那一项会被刻意跳过**
 
-把脚本头里这两组字段删到只剩一种语言，即删掉这 4 行：
-`@name:zh-TW`、`@name:ja`、`@description:zh-TW`、`@description:ja`。
+`app/models/script.rb` 第 832-833 行：
 
-**代价**：繁体中文和日文用户在 Greasy Fork 上会看到英文名与英文描述。
+```ruby
+# Ignore if we match the default locale
+next if meta_locale == locale
+```
+
+如果某个语言恰好等于脚本的「默认语言」，那它的描述**不会**单独建档。
+
+**③ 默认语言由语言检测猜出来**
+
+`app/models/concerns/detects_locale.rb`：
+
+```ruby
+dl_lang_code = DetectLanguage.detect_code(ft[0...1000])   # 只看前 1000 字符
+```
+
+拿脚本**前 1000 字符**丢给 DetectLanguage 服务猜，猜不出才回退英文。
+
+### 为什么本项目会踩中
+
+本脚本曾同时提供 `@name:zh-TW`、`@name:ja` 及其对应描述。而它前 1000 字符里
+含有 **65 个日文假名**（来自 `@name:ja` 与 `@description:ja`），足以让检测器
+把脚本判为 `ja` —— 于是 `ja` 落入 ② 的跳过分支，触发 ① 的报错。
+
+> 值得记一笔：第一次「补上 zh-TW / ja 描述」的修复（提交 `cd28668`）
+> **在语言检测眼里反而加重了** `ja` 的特征，所以报错没变。
+
+### 处置（提交 `652c6c2`）
+
+只保留 **英文基础 + `zh-CN`** 一种本地化变体，前 1000 字符的假名清零。
+这样 ② 的跳过逻辑无论怎么走都不会踩到。
+
+**代价**：繁体中文与日文用户在 Greasy Fork 上看到英文标题与描述。
 功能完全不受影响（这些字段只影响展示）。
 
-> 这个绕法**尚未实测**，属于待验证的建议。
+### 如果以后想加回多语言
+
+必须避免「检测出的默认语言」与「提供了 `@name:xx` 的语言」错配。稳妥做法：
+
+- 每种 `@name:xx` 都配一个**内容不同**的 `@description:xx`（相同也报错）
+- 或干脆不写任何 `@name:xx`，只用基础 `@name`
+- 改完先确认脚本前 1000 字符里没有会误导语言检测的文字
 
 ---
 
