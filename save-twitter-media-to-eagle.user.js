@@ -1,14 +1,10 @@
 // ==UserScript==
 // @name         Save Twitter/X Media to Eagle
 // @name:zh-CN   Twitter/X 媒体收藏到 Eagle
-// @name:zh-TW   Twitter/X 媒體收藏到 Eagle
-// @name:ja      Twitter/X のメディアを Eagle に保存
 // @namespace    https://github.com/Frostleaf0929/Eagle-media-collector
-// @version      3.2.1
+// @version      3.2.2
 // @description  Add an Eagle button to the tweet action bar: one click saves the original video/images into Eagle. Visual settings panel, custom filename template with sequence numbers, optional categorize dialog, jump-to-Eagle links.
 // @description:zh-CN  在推文操作栏加 Eagle 按钮，一键把原视频/原图存进 Eagle；可视化设置面板、自定义文件名与序号、可选分类面板、可跳转 Eagle
-// @description:zh-TW  在推文操作欄加 Eagle 按鈕，一鍵把原影片/原圖存進 Eagle；視覺化設定面板、自訂檔案名稱與序號、可選分類面板、可跳轉 Eagle
-// @description:ja      ツイートの操作バーに Eagle ボタンを追加し、ワンクリックで元の動画・画像を Eagle に保存します。視覚的な設定パネル、連番付きのカスタムファイル名テンプレート、任意の分類パネル、Eagle へのジャンプに対応。
 // @author       Frostleaf0929
 // @license      MIT
 // @homepageURL  https://github.com/Frostleaf0929/Eagle-media-collector
