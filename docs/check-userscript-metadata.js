@@ -86,6 +86,31 @@ for (const k of ["name", "namespace", "version", "description", "author", "licen
   console.log("  " + (has ? "OK  " : "!!  ") + "@" + k);
 }
 
+// —— 检查 1b：元数据每项必须单行 ——
+//
+// 踩过的坑：把多行说明写进元数据行，第二行没有 `//` 前缀就成了 JavaScript 代码，
+// Greasy Fork 报 `Uncaught SyntaxError: Unexpected identifier`。
+// 多行说明应该放 Greasy Fork 的「描述」大文本框（那是纯文本字段，允许换行）。
+console.log("");
+console.log("=== 1b. 元数据是否都写成单行 ===");
+{
+  // 元数据块里任何不以 // 开头的非空行都是「上一行值里混进了换行」的证据
+  const stray = [];
+  head.split(/\r?\n/).forEach((l, i) => {
+    if (l.trim() === "") return;
+    if (!/^\s*\/\//.test(l)) stray.push({ n: i + 1, l: l.trim() });
+  });
+  if (stray.length === 0) {
+    console.log("  OK  元数据块内每行都有 // 前缀，没有断行");
+  } else {
+    bad++;
+    console.log("  !!  元数据块内有 " + stray.length + " 行没有 // 前缀 —— 说明上一行的值里混进了换行：");
+    stray.forEach((s) => console.log("     第 " + s.n + " 行: " + s.l.slice(0, 80)));
+    console.log("     换行后这些行会被当成 JavaScript 代码 → 报 Unexpected identifier");
+    console.log("     修法：把多行说明移到 Greasy Fork 的「描述」文本框，元数据只留一句短的");
+  }
+}
+
 // —— 检查 2：长度上限 ——
 console.log("");
 console.log("=== 2. 长度上限（超长会被静默截断）===");

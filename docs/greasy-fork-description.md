@@ -1,13 +1,24 @@
 # Greasy Fork 脚本页：可直接粘贴的文案
 
-> **两条硬限制**（都来自 Greasy Fork 源码 `app/models/script.rb`，实测确认）：
+> **先分清两个「描述」—— 它们不是一回事，但共用同一份数据**：
 >
-> 1. **描述框不渲染 Markdown**。写 `[文字](链接)` 会原样显示成 `[文字](链接)`，
->    因为它把描述当纯文本存取，没有 Markdown 转换管道。要给网址就直接写完整 URL。
-> 2. **描述上限 500 字符**，超长会**静默截断**（不报错）。
->    所以脚本描述必须短，详细内容放仓库，用链接引过去。
+> | | 脚本头的元数据 | Greasy Fork 的「描述」文本框 |
+> | --- | --- | --- |
+> | 长什么样 | `// @description:zh-CN  一句话` | 网页上那个大文本域 |
+> | **能否换行** | ❌ **必须单行** | ✅ 可以多行 |
+> | 上限 | 500 字符 | 同一份数据，也是 500 字符 |
 >
-> 上面第 2 条踩过一次：曾粘了 1405 字符的版本，被截断在第 500 字符。
+> **踩过的坑**：在 Greasy Fork 网页编辑器里把**多行说明**写进了**元数据行**。
+> 换行后第二行没有 `//` 前缀，就被当成 JavaScript 代码，报
+> `Uncaught SyntaxError: Unexpected identifier 'Eagle'`（`Eagle` 正是断行后那行的开头）。
+>
+> **正确做法**：
+> - **元数据**只放**一句短的**（单行）
+> - **多行说明**粘到 Greasy Fork 的「描述」文本框里
+>
+> 另外两条也来自 Greasy Fork 源码 `app/models/script.rb`
+> （`MAX_LENGTHS = { name: 100, description: 500 }`，超长**静默截断**不报错）：
+> **描述框不渲染 Markdown**（`[文字](链接)` 会原样显示），要给网址就直接写完整 URL。
 
 ---
 
@@ -23,9 +34,29 @@ Save Twitter/X Media to Eagle
 
 ---
 
-## 描述
+## 元数据：`@description` 只写一句（必须单行）
 
-### 推荐版（410 字符，在 500 上限内）
+### 中文（推荐，69 字符）
+
+```text
+在推文操作栏加 Eagle 按钮，一键把原视频/原图存进 Eagle；可视化设置面板、自定义文件名与序号、可选分类面板、可跳转 Eagle
+```
+
+### 英文（218 字符）
+
+```text
+Add an Eagle button to the tweet action bar: one click saves the original video/images into Eagle. Visual settings panel, custom filename template with sequence numbers, optional categorize dialog, jump-to-Eagle links.
+```
+
+> 这行是写在 `// @description:zh-CN  ` 后面的。
+> **不要在这里换行**，也不要写 Markdown。
+> 想加更多内容，放到下面的「描述文本框」里。
+
+---
+
+## 描述文本框：多行版（410 字符，在 500 上限内）
+
+这段粘到 Greasy Fork 的「描述」框。**可以换行**，但不要写 Markdown，网址直接写完整 URL。
 
 ```text
 把 X/Twitter 的原视频、原图一键存进 Eagle，不用先下载再导入。
@@ -44,7 +75,7 @@ https://github.com/Frostleaf0929/Eagle-media-collector
 完整说明、更新日志与扩展补丁见仓库。
 ```
 
-用 `repo/docs/check-greasy-fork-description.js` 可以随时核对长度。
+用 `node docs/check-greasy-fork-description.js` 可以随时核对长度。
 
 ---
 

@@ -22,7 +22,7 @@ if (!fs.existsSync(file)) {
 const md = fs.readFileSync(file, "utf8");
 const FENCE = "\u0060\u0060\u0060";
 
-// 找「### 推荐版」下的第一个 ```text 块
+// 找「## 描述文本框」下的第一个 ```text 块
 function extractBlock(text, headingKeyword) {
   const h = text.indexOf(headingKeyword);
   if (h < 0) return null;
@@ -34,9 +34,10 @@ function extractBlock(text, headingKeyword) {
   return text.slice(bodyStart, e).replace(/\n$/, "");
 }
 
-const body = extractBlock(md, "### 推荐版");
+const heading = "## 描述文本框";
+const body = extractBlock(md, heading);
 if (body === null) {
-  console.error("没能从 " + path.basename(file) + " 里提取到「### 推荐版」下的 text 代码块。");
+  console.error("没能从 " + path.basename(file) + " 里提取到「" + heading + "」下的 text 代码块。");
   process.exit(2);
 }
 

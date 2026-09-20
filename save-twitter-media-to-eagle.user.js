@@ -2,7 +2,7 @@
 // @name         Save Twitter/X Media to Eagle
 // @name:zh-CN   Twitter/X 媒体收藏到 Eagle
 // @namespace    https://github.com/Frostleaf0929/Eagle-media-collector
-// @version      3.2.2
+// @version      3.2.6
 // @description  Add an Eagle button to the tweet action bar: one click saves the original video/images into Eagle. Visual settings panel, custom filename template with sequence numbers, optional categorize dialog, jump-to-Eagle links.
 // @description:zh-CN  在推文操作栏加 Eagle 按钮，一键把原视频/原图存进 Eagle；可视化设置面板、自定义文件名与序号、可选分类面板、可跳转 Eagle
 // @author       Frostleaf0929
