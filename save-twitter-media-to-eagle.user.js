@@ -2,7 +2,7 @@
 // @name         Save Twitter/X Media to Eagle
 // @name:zh-CN   Twitter/X 媒体收藏到 Eagle
 // @namespace    https://github.com/Frostleaf0929/Eagle-media-collector
-// @version      3.2.8
+// @version      3.2.9
 // @description  Add an Eagle button to the tweet action bar: one click saves the original video/images into Eagle. Visual settings panel, custom filename template with sequence numbers, optional categorize dialog, jump-to-Eagle links.
 // @description:zh-CN  在推文操作栏加 Eagle 按钮，一键把原视频/原图存进 Eagle；可视化设置面板、自定义文件名与序号、可选分类面板、可跳转 Eagle
 // @author       Frostleaf0929
@@ -110,7 +110,7 @@
   function imgKeyOf(u) {
     if (!u) return null;
     // /media/、/card_img/、以及 GIF(video) 的三种海报图路径，都要能取出 ID
-    const m = String(u).match(/(?:pbs\.twimg\.com\/(?:media|card_img|amplify_video_thumb|ext_tw_video_thumb|tweet_video_thumb)\/|pbs\.twimg\.com\/[^/]+\/)([A-Za-z0-9_-]+)/);
+    const m = String(u).match(/(?:pbs\.twimg\.com\/(?:media|card_img|amplify_video_thumb|ext_tw_video_thumb|tweet_video_thumb)\/|pbs\.twimg\.com\/[A-Za-z0-9_]+\/)([A-Za-z0-9_-]{10,})/);
     return m ? m[1] : null;
   }
 
@@ -153,7 +153,10 @@
     if (!u) return null;
     const s = String(u).replace(/\\\//g, "/");
     const okHost = /^https?:\/\/pbs\.twimg\.com\/(media|card_img|amplify_video_thumb|ext_tw_video_thumb|tweet_video_thumb)\//.test(s);
-    const okLegacy = /^https?:\/\/pbs\.twimg\.com\/[^/]+\/[A-Za-z0-9_-]{3,}/.test(s);
+    // 兜底：只放行「扁平路径 + 像媒体 ID 的段」，避免把头像(profile_images)、
+    // 表情(emoji) 这类非媒体图也当成可收藏图片。
+    const okLegacy = /^https?:\/\/pbs\.twimg\.com\/[A-Za-z0-9_]+\/[A-Za-z0-9_-]{10,}(?:[/?]|$)/.test(s) &&
+      !/^https?:\/\/pbs\.twimg\.com\/(profile_images|profile_banners|emoji|hashflags|semantic_core_imgs)\//.test(s);
     if (!okHost && !okLegacy) return null;
     if (/[?&]name=orig/.test(s)) return s;
     if (/[?&]name=/.test(s)) return s.replace(/([?&]name=)[^&]*/, "$1orig");
@@ -842,8 +845,12 @@
     try { articles = Array.from(document.querySelectorAll("article")); } catch (e) { return; }
     for (const art of articles) {
       if (art.querySelector(".eagle-bar-wrap")) continue;
+      // 注入条件必须与「实际能收藏什么」完全一致：
+      // 统一用 collectTargets()，避免出现「能保存但按钮不出现」。
+      // （这里曾经写死只认 video 与 pbs.twimg.com/media/，
+      //   所以带链接卡片预览图 card_img 的推文永远没有按钮 —— 已修正）
       let has = false;
-      try { has = !!art.querySelector("video") || !!art.querySelector('img[src*="pbs.twimg.com/media/"]'); } catch (e) {}
+      try { has = collectTargets(art).length > 0; } catch (e) {}
       if (!has) continue;
       const bar = findActionBar(art);
       if (!bar) continue;
@@ -1545,7 +1552,15 @@
         };
       }
       return {
-        version: "3.1.0",
+        // 从 GM_info 读真实版本，避免像以前那样写死后一直显示旧版本号
+        version: (function () {
+          try {
+            if (typeof GM_info !== "undefined" && GM_info && GM_info.script && GM_info.script.version) {
+              return GM_info.script.version;
+            }
+          } catch (e) {}
+          return "unknown";
+        })(),
         url: location.href,
         styleInjected: !!styleEl,
         styleLength: styleEl ? styleEl.textContent.length : 0,
