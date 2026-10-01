@@ -2,7 +2,7 @@
 // @name         Save Twitter/X Media to Eagle
 // @name:zh-CN   Twitter/X 媒体收藏到 Eagle
 // @namespace    https://github.com/Frostleaf0929/Eagle-media-collector
-// @version      3.2.9
+// @version      3.2.10
 // @description  Add an Eagle button to the tweet action bar: one click saves the original video/images into Eagle. Visual settings panel, custom filename template with sequence numbers, optional categorize dialog, jump-to-Eagle links.
 // @description:zh-CN  在推文操作栏加 Eagle 按钮，一键把原视频/原图存进 Eagle；可视化设置面板、自定义文件名与序号、可选分类面板、可跳转 Eagle
 // @author       Frostleaf0929
@@ -622,6 +622,9 @@
   max-width:380px; box-shadow:0 6px 22px rgba(0,0,0,.45); white-space:pre-wrap;
 }
 .eagle-toast b{ color:#7ee787; }
+/* 整条提示可点（成功提示专用）：给出手型光标与 hover 反馈 */
+.eagle-toast.eagle-toast-clickable{ cursor:pointer; }
+.eagle-toast.eagle-toast-clickable:hover{ background:rgba(40,42,48,.98); border-color:#5FB0FF; }
 .eagle-toast-btn{
   display:inline-block; padding:5px 12px; border-radius:6px; cursor:pointer;
   background:#3B9BFF; color:#fff !important; text-decoration:none !important; font-size:12px;
@@ -727,22 +730,28 @@
       e = el("div", "eagle-toast");
       e.id = "eagle-toast";
       document.body.appendChild(e);
-      // 事件委托：提示里的任何 [data-eagle-open] 按钮都走这里。
-      // 用委托而不是逐个绑定，避免"绑定时刻子元素还没生成"的问题，
-      // 也不依赖浏览器对自定义协议 href 的处理。
+      // 事件委托：提示里的任何 [data-eagle-open] 元素都走这里。
+      // 优先读「容器自身」的属性 —— 这样整个提示条可点（对齐 Eagle 原生交互），
+      // 而不再依赖提示内部放一个按钮。
       e.addEventListener("click", function (ev) {
         let n = ev.target;
-        while (n && n !== e) {
+        while (n) {
           if (n.getAttribute && n.getAttribute("data-eagle-open")) {
             ev.preventDefault();
             ev.stopPropagation();
             openEagleItem(n.getAttribute("data-item-id"));
             return;
           }
+          if (n === e) break;
           n = n.parentElement;
         }
       });
     }
+    // 每次显示都重置可点状态，避免上一条可点提示的属性残留到普通提示上
+    e.removeAttribute("data-eagle-open");
+    e.removeAttribute("data-item-id");
+    e.removeAttribute("title");
+    e.classList.remove("eagle-toast-clickable");
     e.innerHTML = html;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => e.remove(), ms || 4000);
@@ -1009,13 +1018,20 @@
     const first = items[0];
     let html = "<b>已保存到 Eagle</b>" + (items.length > 1 ? "（共 " + items.length + " 项）" : "") + "<br>";
     html += "<span style='color:#bbb'>" + escapeHtml(String((first && first.name) || "").slice(0, 70)) + "</span>";
-    const links = items.slice(0, 5).map((it) =>
-      "<a class='eagle-toast-btn' data-eagle-open='1' data-item-id='" + escapeHtml(it.id) + "' " +
-      "href='eagle://item/" + escapeHtml(it.id) + "'>" +
-      (items.length > 1 ? "打开" : "在 Eagle 中打开") + "</a>"
-    ).join(" ");
-    html += "<div style='margin-top:8px;display:flex;gap:8px;flex-wrap:wrap'>" + links + "</div>";
-    toast(html, 12000);
+    if (items.length > 1) {
+      html += "<br><span style='color:#8ab4f8'>点这里打开第 1 项（共 " + items.length + " 项已入库）</span>";
+    } else {
+      html += "<br><span style='color:#8ab4f8'>点这里在 Eagle 中打开</span>";
+    }
+    // 整个提示条可点，而不是里面放按钮（对齐 Eagle 原生提示的交互）。
+    // 通过给容器打 data-eagle-open，委托里会优先读容器自身的属性。
+    const e = toast(html, 12000);
+    if (first && first.id) {
+      e.setAttribute("data-eagle-open", "1");
+      e.setAttribute("data-item-id", first.id);
+      e.classList.add("eagle-toast-clickable");
+      e.setAttribute("title", "点此在 Eagle 中打开");
+    }
     if (getCfg("autoOpen") && first && first.id) {
       setTimeout(() => openEagleItem(first.id), 700);
     }
@@ -1450,11 +1466,18 @@
               const cur = v.currentSrc || v.getAttribute("src") || "";
               const pid = mediaIdOf(poster);
               const cid = mediaIdOf(cur);
+              // 关键：把 URL 原文也带上。
+              // 否则「srcKind=真实地址 但 srcId=null」时无从判断是哪种新路径。
               return {
                 posterKind: /card_img/.test(poster) ? "card_img" : /media/.test(poster) ? "media" : poster ? "其他" : "（无）",
                 posterId: pid,
+                posterUrl: poster.slice(0, 220),
                 srcKind: cur.startsWith("blob:") ? "blob(MSE流)" : cur ? "真实地址" : "（空）",
                 srcId: cid,
+                srcUrl: cur.slice(0, 220),
+                // 地址里出现了哪类关键字，方便一眼看出路径类型
+                srcTags: ["amplify_video", "ext_tw_video", "tweet_video", ".mp4", ".m3u8", "/pl/", "video.twimg.com"]
+                  .filter((k) => cur.includes(k)).join(",") || "（无关键字）",
                 inMap: (pid && mediaIdToUrl.has(pid)) || (cid && mediaIdToUrl.has(cid)) ? "已收录" : "未收录",
               };
             });
