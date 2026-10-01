@@ -2,7 +2,7 @@
 // @name         Save Twitter/X Media to Eagle
 // @name:zh-CN   Twitter/X 媒体收藏到 Eagle
 // @namespace    https://github.com/Frostleaf0929/Eagle-media-collector
-// @version      3.2.10
+// @version      3.2.11
 // @description  Add an Eagle button to the tweet action bar: one click saves the original video/images into Eagle. Visual settings panel, custom filename template with sequence numbers, optional categorize dialog, jump-to-Eagle links.
 // @description:zh-CN  在推文操作栏加 Eagle 按钮，一键把原视频/原图存进 Eagle；可视化设置面板、自定义文件名与序号、可选分类面板、可跳转 Eagle
 // @author       Frostleaf0929
@@ -102,7 +102,10 @@
     if (m) return m[1];
     m = String(u).match(/ext_tw_video(?:_thumb)?\/(\d+)/);
     if (m) return m[1];
-    m = String(u).match(/tweet_video(?:_thumb)?\/([0-9a-f]+)/i);
+    // X 的 GIF 是无声 mp4，地址形如 video.twimg.com/tweet_video/HTSr2kgbkAAvSSg.mp4
+    // 这里的 ID 是 base64 风格的字母数字串（含大写），**不是**纯十六进制。
+    // 早期写成 [0-9a-f] 导致含 T/S/A 之类的 ID 全部抽不出来 —— 这是 GIF 抓不到的根因。
+    m = String(u).match(/tweet_video(?:_thumb)?\/([0-9A-Za-z_-]+)/);
     if (m) return m[1];
     return null;
   }
@@ -1018,12 +1021,7 @@
     const first = items[0];
     let html = "<b>已保存到 Eagle</b>" + (items.length > 1 ? "（共 " + items.length + " 项）" : "") + "<br>";
     html += "<span style='color:#bbb'>" + escapeHtml(String((first && first.name) || "").slice(0, 70)) + "</span>";
-    if (items.length > 1) {
-      html += "<br><span style='color:#8ab4f8'>点这里打开第 1 项（共 " + items.length + " 项已入库）</span>";
-    } else {
-      html += "<br><span style='color:#8ab4f8'>点这里在 Eagle 中打开</span>";
-    }
-    // 整个提示条可点，而不是里面放按钮（对齐 Eagle 原生提示的交互）。
+    // 整条提示可点即可，不再显示「点这里…」这类提示文字。
     // 通过给容器打 data-eagle-open，委托里会优先读容器自身的属性。
     const e = toast(html, 12000);
     if (first && first.id) {
@@ -1542,6 +1540,7 @@
     images: () => Array.from(imageUrlSet),
     targets: (a) => collectTargets(a || document.querySelector("article")),
     toOriginalImage,
+    idOf: mediaIdOf,
     rescan: () => { scanScripts(); scanPerformance(); scanDomImages(); injectAll(); },
     save: (u, extra) => saveToEagle(u, buildName(document.querySelector("article"), u), extra),
     saved: () => Array.from(libraryIndex),
