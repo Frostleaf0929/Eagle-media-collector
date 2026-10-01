@@ -2,7 +2,7 @@
 // @name         Save Twitter/X Media to Eagle
 // @name:zh-CN   Twitter/X 媒体收藏到 Eagle
 // @namespace    https://github.com/Frostleaf0929/Eagle-media-collector
-// @version      3.2.7
+// @version      3.2.8
 // @description  Add an Eagle button to the tweet action bar: one click saves the original video/images into Eagle. Visual settings panel, custom filename template with sequence numbers, optional categorize dialog, jump-to-Eagle links.
 // @description:zh-CN  在推文操作栏加 Eagle 按钮，一键把原视频/原图存进 Eagle；可视化设置面板、自定义文件名与序号、可选分类面板、可跳转 Eagle
 // @author       Frostleaf0929
@@ -55,7 +55,9 @@
     catchQuoteImage: false, // 引用推文（转推卡片）里的图片，默认不抓
     askCategory: false,
     rememberFolder: true,
-    autoOpen: true,
+    // 默认【不】自动跳转：保存成功后只弹提示，由用户点提示里的按钮再跳。
+    // （原先默认 true，会直接抢走焦点，用户明确要求改掉）
+    autoOpen: false,
     nameTemplate: DEFAULT_TEMPLATE,
     lastFolderId: "",
     lastTags: "",
@@ -107,8 +109,8 @@
 
   function imgKeyOf(u) {
     if (!u) return null;
-    // /media/ 与 /card_img/ 是两种不同的图片路径，都要能取出 ID
-    const m = String(u).match(/(?:pbs\.twimg\.com\/(?:media|card_img|amplify_video_thumb|ext_tw_video_thumb)\/|pbs\.twimg\.com\/[^/]+\/)([A-Za-z0-9_-]+)/);
+    // /media/、/card_img/、以及 GIF(video) 的三种海报图路径，都要能取出 ID
+    const m = String(u).match(/(?:pbs\.twimg\.com\/(?:media|card_img|amplify_video_thumb|ext_tw_video_thumb|tweet_video_thumb)\/|pbs\.twimg\.com\/[^/]+\/)([A-Za-z0-9_-]+)/);
     return m ? m[1] : null;
   }
 
@@ -150,7 +152,7 @@
   function toOriginalImage(u) {
     if (!u) return null;
     const s = String(u).replace(/\\\//g, "/");
-    const okHost = /^https?:\/\/pbs\.twimg\.com\/(media|card_img|amplify_video_thumb|ext_tw_video_thumb)\//.test(s);
+    const okHost = /^https?:\/\/pbs\.twimg\.com\/(media|card_img|amplify_video_thumb|ext_tw_video_thumb|tweet_video_thumb)\//.test(s);
     const okLegacy = /^https?:\/\/pbs\.twimg\.com\/[^/]+\/[A-Za-z0-9_-]{3,}/.test(s);
     if (!okHost && !okLegacy) return null;
     if (/[?&]name=orig/.test(s)) return s;
@@ -169,7 +171,7 @@
   }
 
   const VIDEO_URL_RE = /https?:\/\/video\.twimg\.com\/[^"'\s\\<>]+?\.mp4[^"'\s\\<>]*/g;
-  const IMG_URL_RE = /https?:\/\/pbs\.twimg\.com\/(?:media|card_img|amplify_video_thumb|ext_tw_video_thumb)\/[^"'\s\\<>]+/g;
+  const IMG_URL_RE = /https?:\/\/pbs\.twimg\.com\/(?:media|card_img|amplify_video_thumb|ext_tw_video_thumb|tweet_video_thumb)\/[^"'\s\\<>]+/g;
 
   function harvest(text) {
     if (!text || typeof text !== "string") return;
@@ -242,7 +244,7 @@
           seenPerf.add(n);
           const id = mediaIdOf(n);
           if (id) offerVideo(id, n);
-        } else if (/pbs\.twimg\.com\/(media|card_img|amplify_video_thumb|ext_tw_video_thumb)\//.test(n)) {
+        } else if (/pbs\.twimg\.com\/(media|card_img|amplify_video_thumb|ext_tw_video_thumb|tweet_video_thumb)\//.test(n)) {
           seenPerf.add(n);
           offerImage(n);
         }
@@ -1429,6 +1431,64 @@
         const btn = art.querySelector(".eagle-bar-btn");
         if (btn) btn.click();
         else toast("没找到推文，请先打开一条带媒体（视频/图片）的推文");
+      });
+      // 排查「看不到小按钮」：把当前页面能识别到的媒体逐条列出来
+      GM_registerMenuCommand("🧪 检测本页能收藏什么（排查用）", function () {
+        try {
+          const arts = Array.from(document.querySelectorAll("article"));
+          const rows = arts.map((a, i) => {
+            const txt = (a.querySelector('[data-testid="tweetText"]') || {}).textContent || "";
+            const vids = Array.from(a.querySelectorAll("video")).map((v) => {
+              const poster = v.getAttribute("poster") || "";
+              const cur = v.currentSrc || v.getAttribute("src") || "";
+              const pid = mediaIdOf(poster);
+              const cid = mediaIdOf(cur);
+              return {
+                posterKind: /card_img/.test(poster) ? "card_img" : /media/.test(poster) ? "media" : poster ? "其他" : "（无）",
+                posterId: pid,
+                srcKind: cur.startsWith("blob:") ? "blob(MSE流)" : cur ? "真实地址" : "（空）",
+                srcId: cid,
+                inMap: (pid && mediaIdToUrl.has(pid)) || (cid && mediaIdToUrl.has(cid)) ? "已收录" : "未收录",
+              };
+            });
+            const imgs = Array.from(a.querySelectorAll("img")).filter((im) => {
+              const s = im.getAttribute("src") || "";
+              return /pbs\.twimg\.com/.test(s);
+            }).map((im) => {
+              const s = im.getAttribute("src") || "";
+              return {
+                kind: /card_img/.test(s) ? "card_img" : /media/.test(s) ? "media" : "其他",
+                ok: !!toOriginalImage(s),
+                url: s.slice(0, 110),
+              };
+            });
+            const tg = collectTargets(a);
+            return {
+              序号: i,
+              按钮: a.querySelector(".eagle-bar-btn") ? "有" : "无",
+              文字: txt.replace(/\s+/g, " ").slice(0, 40),
+              video数: vids.length,
+              videos: vids,
+              图片数: imgs.length,
+              图片: imgs,
+              将收藏: tg.map((x) => x.type + ":" + String(x.url).slice(0, 90)),
+            };
+          }).filter((r) => r.video数 || r.图片数 || r.将收藏.length);
+
+          const summary = {
+            页面: location.href,
+            脚本版本: (window.__eagleMedia && window.__eagleMedia.diag ? window.__eagleMedia.diag().version : "?"),
+            已收录媒体ID: Array.from(mediaIdToUrl.keys()),
+            含媒体的推文数: rows.length,
+            明细: rows,
+          };
+          const txt = JSON.stringify(summary, null, 2);
+          console.log("[Eagle媒体] 检测结果：\n" + txt);
+          try { if (navigator.clipboard) navigator.clipboard.writeText(txt); } catch (e) {}
+          alert("检测结果已复制到剪贴板，也已输出到控制台。\n\n含媒体的推文：" + rows.length + " 条\n已收录媒体 ID：" + Array.from(mediaIdToUrl.keys()).length + " 个");
+        } catch (e) {
+          alert("检测失败：" + e.message);
+        }
       });
       GM_registerMenuCommand("🔍 诊断（复制结果发给作者）", function () {
         try {
