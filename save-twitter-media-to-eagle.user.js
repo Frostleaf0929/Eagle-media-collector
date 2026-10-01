@@ -2,7 +2,7 @@
 // @name         Save Twitter/X Media to Eagle
 // @name:zh-CN   Twitter/X 媒体收藏到 Eagle
 // @namespace    https://github.com/Frostleaf0929/Eagle-media-collector
-// @version      3.2.6
+// @version      3.2.7
 // @description  Add an Eagle button to the tweet action bar: one click saves the original video/images into Eagle. Visual settings panel, custom filename template with sequence numbers, optional categorize dialog, jump-to-Eagle links.
 // @description:zh-CN  在推文操作栏加 Eagle 按钮，一键把原视频/原图存进 Eagle；可视化设置面板、自定义文件名与序号、可选分类面板、可跳转 Eagle
 // @author       Frostleaf0929
@@ -107,7 +107,8 @@
 
   function imgKeyOf(u) {
     if (!u) return null;
-    const m = String(u).match(/pbs\.twimg\.com\/media\/([A-Za-z0-9_-]+)/);
+    // /media/ 与 /card_img/ 是两种不同的图片路径，都要能取出 ID
+    const m = String(u).match(/(?:pbs\.twimg\.com\/(?:media|card_img|amplify_video_thumb|ext_tw_video_thumb)\/|pbs\.twimg\.com\/[^/]+\/)([A-Za-z0-9_-]+)/);
     return m ? m[1] : null;
   }
 
@@ -143,10 +144,15 @@
 
   // X 图片地址形如 pbs.twimg.com/media/XXX?format=jpg&name=small
   // 把 name 换成 orig 就是原图（同 Eagle 扩展内置的 Twitter 规则）
+  //
+  // 链接卡片的预览图走的是另一条路径：pbs.twimg.com/card_img/XXX/xxx?format=jpg&name=small
+  // 早期版本只认 /media/，所以「带链接卡片的推文」里的预览图完全抓不到。
   function toOriginalImage(u) {
     if (!u) return null;
     const s = String(u).replace(/\\\//g, "/");
-    if (!/^https?:\/\/pbs\.twimg\.com\/media\//.test(s)) return null;
+    const okHost = /^https?:\/\/pbs\.twimg\.com\/(media|card_img|amplify_video_thumb|ext_tw_video_thumb)\//.test(s);
+    const okLegacy = /^https?:\/\/pbs\.twimg\.com\/[^/]+\/[A-Za-z0-9_-]{3,}/.test(s);
+    if (!okHost && !okLegacy) return null;
     if (/[?&]name=orig/.test(s)) return s;
     if (/[?&]name=/.test(s)) return s.replace(/([?&]name=)[^&]*/, "$1orig");
     return s + (s.includes("?") ? "&" : "?") + "name=orig";
@@ -163,7 +169,7 @@
   }
 
   const VIDEO_URL_RE = /https?:\/\/video\.twimg\.com\/[^"'\s\\<>]+?\.mp4[^"'\s\\<>]*/g;
-  const IMG_URL_RE = /https?:\/\/pbs\.twimg\.com\/media\/[^"'\s\\<>]+/g;
+  const IMG_URL_RE = /https?:\/\/pbs\.twimg\.com\/(?:media|card_img|amplify_video_thumb|ext_tw_video_thumb)\/[^"'\s\\<>]+/g;
 
   function harvest(text) {
     if (!text || typeof text !== "string") return;
@@ -236,7 +242,7 @@
           seenPerf.add(n);
           const id = mediaIdOf(n);
           if (id) offerVideo(id, n);
-        } else if (/pbs\.twimg\.com\/media\//.test(n)) {
+        } else if (/pbs\.twimg\.com\/(media|card_img|amplify_video_thumb|ext_tw_video_thumb)\//.test(n)) {
           seenPerf.add(n);
           offerImage(n);
         }
@@ -248,14 +254,14 @@
     try {
       for (const e of document.querySelectorAll('script[type="application/json"], script:not([src])')) {
         const t = e.textContent;
-        if (t && t.length > 40 && (t.includes("video.twimg.com") || t.includes("pbs.twimg.com/media/"))) harvest(t);
+        if (t && t.length > 40 && (t.includes("video.twimg.com") || t.includes("pbs.twimg.com/media/") || t.includes("pbs.twimg.com/card_img/"))) harvest(t);
       }
     } catch (e) {}
   }
 
   function scanDomImages() {
     try {
-      for (const img of document.querySelectorAll('img[src*="pbs.twimg.com/media/"]')) {
+      for (const img of document.querySelectorAll('img[src*="pbs.twimg.com/media/"], img[src*="pbs.twimg.com/card_img/"]')) {
         const src = img.getAttribute("src") || img.currentSrc;
         if (src) offerImage(src);
       }
@@ -314,7 +320,7 @@
     const out = [];
     const allowQuote = quoteAllowed();
     try {
-      for (const img of article.querySelectorAll('img[src*="pbs.twimg.com/media/"]')) {
+      for (const img of article.querySelectorAll('img[src*="pbs.twimg.com/media/"], img[src*="pbs.twimg.com/card_img/"]')) {
         if (!allowQuote && isInQuotedTweet(img, article)) continue;
         const orig = toOriginalImage(img.getAttribute("src") || img.currentSrc || "");
         if (orig) out.push(orig);
@@ -546,6 +552,43 @@
     return null;
   }
 
+  /* ---------------------------------------------------------------------------
+     为什么需要「按名字匹配」
+
+     saveToEagle 提交的是 { url: 媒体地址, name, website: 推文页地址 }。
+     实测发现：Eagle 条目里 it.url 存的是 **website（推文页地址）**，
+     而不是我们提交的媒体地址 —— 所以拿 it.url 去 mediaKey() 永远是 null，
+     严格 URL 匹配从设计上就不可能成功。
+
+     症状：文件其实已经下载进库了，脚本却在 45 秒后报「没有出现在库里」。
+     对策：URL 匹配失败时，回退到按 **名称** 匹配（名称是脚本按模板生成的，确定性强）。
+     --------------------------------------------------------------------------- */
+  function nameForMatch(s) {
+    return String(s == null ? "" : s).replace(/\s+/g, " ").trim().toLowerCase();
+  }
+
+  function itemMatches(it, key, wantName) {
+    if (!it) return false;
+    // ① 老路：URL 能抽出媒体 ID 就直接比 ID
+    if (key && it.url && mediaKey(it.url) === key) return true;
+    // ② 新路：按名称比（同时覆盖多文件时的 "名字-01" 后缀）
+    const n = nameForMatch(it.name);
+    const w = nameForMatch(wantName);
+    if (!n || !w) return false;
+    if (n === w) return true;
+    return n.startsWith(w) && /^-\d{2,3}$/.test(n.slice(w.length));
+  }
+
+  async function findByKeyOrName(key, wantName) {
+    try {
+      const res = await apiGet("/api/item/list?limit=80&orderBy=CREATEDATE");
+      for (const it of (res && res.data) || []) {
+        if (itemMatches(it, key, wantName)) return it;
+      }
+    } catch (e) {}
+    return null;
+  }
+
   /* =========================== 六、样式 =========================== */
 
   const CSS = `
@@ -561,6 +604,7 @@
 .eagle-bar-btn:hover .eagle-badge{ fill:#5FB0FF; }
 .eagle-bar-btn.eagle-saved .eagle-badge{ fill:#2ECC71; }
 .eagle-bar-btn.eagle-busy .eagle-badge{ fill:#E3B341; }
+.eagle-bar-btn.eagle-pending .eagle-badge{ fill:#3B9BFF; }
 .eagle-bar-btn.eagle-fail .eagle-badge{ fill:#F5386E; }
 .eagle-bar-btn.eagle-gear svg{ width:17px; height:17px; }
 .eagle-bar-btn.eagle-gear .gear-stroke{ stroke:#8b8f96; fill:none; stroke-width:1.7; transition:stroke .2s; }
@@ -775,7 +819,7 @@
   function syncButton(btn, article) {
     if (!btn || !article) return;
     if (btn.classList.contains("eagle-busy")) return;
-    btn.classList.remove("eagle-saved", "eagle-fail");
+    btn.classList.remove("eagle-saved", "eagle-fail", "eagle-pending");
     const targets = collectTargets(article);
     if (targets.length && targets.every((t) => isSaved(t.url))) btn.classList.add("eagle-saved");
   }
@@ -868,43 +912,53 @@
     if (!failedSubmit.length) {
       toast("已全部提交，正在等 Eagle 下载完成…（共 " + total + " 项）");
     }
+    let pendingCount = 0;
     for (const r of results) {
       if (r.error) continue;
-      const info = await confirmOne(r.url);
+      const info = await confirmOne(r.url, r.name);
       r.item = info.item;
       if (info.ok) doneCount++;
-      else r.error = "没有出现在库里（可能网络超时或链接失效）";
+      else {
+        // 提交是成功的（Eagle 已回 200），只是没在轮询期内确认到。
+        // 早期版本在这里直接判失败，导致「明明存进库了却报错」——已修正。
+        r.pending = PENDING_MARK;
+        pendingCount++;
+      }
     }
 
     btn.classList.remove("eagle-busy");
     const okItems = results.filter((r) => r.item).map((r) => r.item);
-    const badList = results.filter((r) => !r.item);
+    const pendingList = results.filter((r) => r.pending);
+    const badList = results.filter((r) => !r.item && !r.pending);
 
-    if (okItems.length && !badList.length) {
-      btn.classList.add("eagle-saved");
-      showSavedToast(okItems, total);
-    } else if (okItems.length) {
-      btn.classList.add("eagle-saved");
-      const detail = badList
-        .slice(0, 3)
-        .map((r) => "· " + escapeHtml(String(r.name || r.url).slice(0, 40)) + "：" + escapeHtml(r.error || "失败"))
-        .join("<br>");
-      toast(
-        "<b>部分保存成功</b>　成功 " + okItems.length + " / " + total +
-          "<br><span style='color:#e3b341'>以下 " + badList.length + " 项没成功：</span><br>" +
-          detail +
-          (badList.length > 3 ? "<br>…" : ""),
-        12000
-      );
-    } else {
+    if (badList.length) {
+      // 只有 Eagle 明确拒绝（提交阶段就失败）才算真失败
       btn.classList.add("eagle-fail");
       const reason = badList[0] && (badList[0].error || "未知原因");
       toast(
         "Eagle 没有保存成功。<br><span style='color:#bbb'>" + escapeHtml(String(reason).slice(0, 120)) + "</span><br>" +
-          "<span style='color:#888'>共 " + total + " 项都没成功</span>",
+          "<span style='color:#888'>共 " + badList.length + " 项失败</span>" +
+          (okItems.length || pendingList.length
+            ? "<br><span style='color:#888'>另有 " + (okItems.length + pendingList.length) + " 项已提交</span>"
+            : ""),
         10000
       );
       setTimeout(() => btn.classList.remove("eagle-fail"), 3000);
+    } else if (pendingList.length) {
+      // 提交成功但未确认：既不是成功（拿不到条目 id、也无法自动跳转），
+      // 也不是失败（Eagle 已接受，只是还没下载完）。用独立的第三种状态表示。
+      btn.classList.remove("eagle-saved");
+      btn.classList.add("eagle-pending");
+      toast(
+        "<b>已提交给 Eagle</b>（共 " + total + " 项）<br>" +
+          "<span style='color:#e3b341'>其中 " + pendingList.length + " 项仍在下载，尚未出现在库中。</span><br>" +
+          "<span style='color:#888'>下载完成后会自动入库，稍后可在 Eagle 里查看。</span>",
+        12000
+      );
+      setTimeout(() => btn.classList.remove("eagle-pending"), 4000);
+    } else {
+      btn.classList.add("eagle-saved");
+      showSavedToast(okItems, total);
     }
   }
 
@@ -921,18 +975,22 @@
     }
   }
 
+  // 提交已成功（Eagle 回了 200），但轮询期内没在库里确认到。
+  // 这不是失败 —— 大文件下载慢、或 Eagle 正忙时很常见。用单独标记区分。
+  const PENDING_MARK = Symbol("eagle-pending");
+
   // 轮询确认某个媒体是否真的进了库
-  async function confirmOne(url) {
+  async function confirmOne(url, wantName) {
     const key = mediaKey(url);
     const deadline = Date.now() + CONFIRM_TIMEOUT_MS;
-    let found = await findByKey(key);
+    let found = await findByKeyOrName(key, wantName);
     while (!found && Date.now() < deadline) {
       await sleep(CONFIRM_INTERVAL_MS);
-      found = await findByKey(key);
+      found = await findByKeyOrName(key, wantName);
       if (found) break;
       libraryLoaded = false;
       await loadLibraryIndex();
-      found = await findByKey(key);
+      found = await findByKeyOrName(key, wantName);
     }
     if (found && key) savedIds.add(key);
     return { ok: !!found, item: found };
